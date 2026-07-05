@@ -159,6 +159,10 @@ def pending_prompt_path() -> Path:
     return inbox_dir() / "_pending_line_prompts.json"
 
 
+def synced_today_path() -> Path:
+    return inbox_dir() / "_current_today_brief.json"
+
+
 def read_pending_prompts() -> dict[str, str]:
     path = pending_prompt_path()
     if not path.exists():
@@ -195,13 +199,17 @@ def latest_morning_cockpit_json() -> Path | None:
 
 
 def build_today_brief() -> str:
-    path = latest_morning_cockpit_json()
-    if not path:
+    path = synced_today_path()
+    if not path.exists():
+        path = latest_morning_cockpit_json()
+    if not path or not path.exists():
         return "目前找不到今日主軸。你可以先用：問主治、問 GPT、查證、記憶候選。"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return "今日主軸讀取失敗。先用 LINE 記下今天遇到的問題，晚點再整理。"
+    if isinstance(payload, dict) and "payload" in payload:
+        payload = payload.get("payload") or {}
     surface = payload.get("command_surface") or {}
     primary = surface.get("primary_focus") or {}
     decisions = surface.get("human_decisions") or []
@@ -576,7 +584,12 @@ class LineCaptureHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         try:
-            if self.path.rstrip("/") != "/webhook":
+            parsed_path = urllib.parse.urlparse(self.path)
+            request_path = parsed_path.path.rstrip("/")
+            if request_path == "/sync_today":
+                self.handle_sync_today(parsed_path)
+                return
+            if request_path != "/webhook":
                 self.send_json({"ok": False, "error": "not_found"}, HTTPStatus.NOT_FOUND)
                 return
             length = int(self.headers.get("Content-Length", "0") or 0)
@@ -613,6 +626,26 @@ class LineCaptureHandler(BaseHTTPRequestHandler):
             self.send_json({"ok": True, "processed": processed})
         except Exception as exc:
             self.send_json({"ok": True, "warning": f"webhook_error_suppressed: {type(exc).__name__}: {exc}"})
+
+    def handle_sync_today(self, parsed_path: urllib.parse.ParseResult) -> None:
+        export_token = os.environ.get("MOBILE_EXPORT_TOKEN", "")
+        query = urllib.parse.parse_qs(parsed_path.query)
+        supplied_token = (query.get("token") or [""])[0] or self.headers.get("x-mobile-export-token", "")
+        if not export_token:
+            self.send_json({"ok": False, "error": "MOBILE_EXPORT_TOKEN is not set"}, HTTPStatus.FORBIDDEN)
+            return
+        if not hmac.compare_digest(export_token, supplied_token):
+            self.send_json({"ok": False, "error": "invalid sync token"}, HTTPStatus.FORBIDDEN)
+            return
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        body = self.rfile.read(length)
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except json.JSONDecodeError:
+            self.send_json({"ok": False, "error": "invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            return
+        write_json(synced_today_path(), {"synced_at": now_iso(), "payload": payload})
+        self.send_json({"ok": True, "preview": build_today_brief()})
 
     def handle_event(self, event: dict[str, Any]) -> str:
         event_type = event.get("type")
