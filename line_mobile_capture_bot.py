@@ -29,7 +29,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parent
 DEFAULT_MOBILE_INBOX = ROOT / "mobile_inbox"
 LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
 TZ = ZoneInfo("Asia/Taipei")
