@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: clinical-learning-os-line-bot
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 line_mobile_capture_bot.py --host 0.0.0.0
+    envVars:
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: MOBILE_INBOX_DIR
+        value: mobile_inbox
+      - key: MOBILE_EXPORT_TOKEN
+        sync: false
