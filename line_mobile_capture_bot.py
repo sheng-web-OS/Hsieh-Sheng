@@ -197,11 +197,11 @@ def latest_morning_cockpit_json() -> Path | None:
 def build_today_brief() -> str:
     path = latest_morning_cockpit_json()
     if not path:
-        return "目前找不到 Morning Cockpit。你可以先用問主治、問 GPT、查證、記憶種子捕捉今天遇到的問題。"
+        return "目前找不到今日主軸。你可以先用：問主治、問 GPT、查證、記憶候選。"
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return "Morning Cockpit 檔案讀取失敗。先用 LINE 捕捉今天的問題，晚點再整理。"
+        return "今日主軸讀取失敗。先用 LINE 記下今天遇到的問題，晚點再整理。"
     surface = payload.get("command_surface") or {}
     primary = surface.get("primary_focus") or {}
     decisions = surface.get("human_decisions") or []
@@ -221,13 +221,13 @@ def build_today_brief() -> str:
             micro_lines.append(f"{index}. {prompt}")
     micro_text = "\n".join(micro_lines) if micro_lines else "無"
     return (
-        "今日任務\n"
+        "今日主軸\n"
         f"主軸：{topic}\n"
         f"完成：{minimum}\n\n"
-        "今天只做：\n"
-        f"1. 口頭練習：{micro_text}\n"
-        f"2. 可問主治：{attending}\n"
-        f"3. 需要查證：{verification}\n\n"
+        "今天只要決定：\n"
+        f"1. 練一句：{micro_text}\n"
+        f"2. 問主治：{attending}\n"
+        f"3. 查證：{verification}\n\n"
         "回覆：接受 / 備用 / 跳過"
     )
 
@@ -282,12 +282,12 @@ def capture_daytime(event: dict[str, Any], capture_type: str, text: str, raw_tex
     append_jsonl(path_for("daytime"), record)
     warning = "；已偵測並遮蔽 PHI-like 片段" if record["deidentification_warning"] else ""
     labels = {
-        "attending_question": "已記錄：這是想問主治的問題",
-        "gpt_followup": "已記錄：這是之後想問 GPT 的問題",
+        "attending_question": "已記錄：問主治",
+        "gpt_followup": "已記錄：問 GPT",
         "patient_deidentified_learning_point": "已記錄：這是去識別化的病人學習點",
-        "evidence_check": "已記錄：這是需要查證或確認本院做法的問題",
-        "memory_seed": "已記錄：這可能值得之後整理成記憶點",
-        "free_text_note": "已記錄：這是一則一般筆記",
+        "evidence_check": "已記錄：查證",
+        "memory_seed": "已記錄：記憶候選",
+        "free_text_note": "已記錄：一般筆記",
     }
     return f"{labels[capture_type]}{warning}"
 
@@ -441,12 +441,12 @@ def parse_postback(event: dict[str, Any]) -> str:
     if mode == "prompt":
         template = values.get("template", "")
         prompts = {
-            "attending": "請直接輸入你想問主治的臨床問題。不要含姓名、病歷號、床號。",
-            "gpt": "請直接輸入你晚點想丟給 GPT 追問的問題。",
-            "evidence": "請直接輸入需要查 guideline、來源或本院做法的點。",
-            "memory": "請直接輸入可能值得變成長期記憶的 seed。",
-            "patient": "請直接輸入去識別化病人學習點。不要含姓名、病歷號、床號、生日。",
-            "evening": "快速 Evening：可回覆 /evening pass 4 none other no，或 /evening partial 3 unsure wrong_branch slight",
+            "attending": "輸入你要問主治的一句臨床問題。不要含姓名、病歷號、床號。",
+            "gpt": "輸入你想晚點問 GPT 的問題。",
+            "evidence": "輸入需要查證的點：guideline、資料來源或本院做法。",
+            "memory": "輸入可能值得長期記住的一個點。",
+            "patient": "輸入去識別化病人學習點。不要含姓名、病歷號、床號、生日。",
+            "evening": "晚間收束：回覆 pass / partial / fail，加一句今天卡在哪。",
         }
         if template in PROMPT_TO_DAYTIME_TYPE:
             set_pending_prompt(event, template)
